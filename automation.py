@@ -162,8 +162,6 @@ for i in boardIds:
                     "leadTime": find_lead_time(content_json)
                 }
             )
-        else:
-            # print(response)
 
 # save lead times array as json file
 with open('lead_times.json', 'w') as f:
