@@ -6,11 +6,12 @@ import os
 import sys
 from datetime import date
 
+# import requests_cache ## pip install requests-cache --user
 from requests.auth import HTTPBasicAuth
 
 # Retrieve account name from user
 Account_Name = input("Account Name: ")
-
+# requests_cache.install_cache('demo_cache')
 Speed_API = "https://{}.leankit.com/io/reporting/speed".format(Account_Name)
 
 # Input from user for authentication
@@ -25,7 +26,7 @@ token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Ijg1MzE5ODc3NCIsIm5hbWUiOi
 req = requests.sessions.session()
 
 card_response = req.get("https://{}.leankit.com/io/reporting/export/cards?token={}".format(Account_Name,
-        token), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache'})
+        token), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache', "Pragma": "no-cache"})
 
 cardsInfo = card_response._content.decode('utf8')
 
@@ -41,6 +42,7 @@ w = open("out.csv", 'w')
 w.writelines([item for item in lines[:-2]])
 w.close()
 
+check = [686342791, 709356071]
 
 # function to find the start lanes, returning them as a list
 def find_lead_time(cards):
@@ -105,7 +107,7 @@ endDate = input("Please enter the end date, e.g: 2019-08-01:\n")
 
 # Retrieve all boards from LeanKit
 response = req.get("https://{}.leankit.com/kanban/api/boards".format(
-    Account_Name), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache'})
+    Account_Name), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache', "Pragma": "no-cache"})
 feedback = response._content.decode('utf8')
 replyData = json.loads(feedback)["ReplyData"][0]
 boardIds = []
@@ -122,47 +124,48 @@ lead_times = []
 for i in boardIds:
     req.cookies.clear()
     # Retrieve board information
-    response = req.get("https://{}.leankit.com/kanban/api/board/{}/GetBoardIdentifiers".format(Account_Name, i), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache'})
+    response = req.get("https://{}.leankit.com/kanban/api/board/{}/GetBoardIdentifiers".format(Account_Name, i), auth=HTTPBasicAuth(email, password), headers={'Cache-Control': 'no-cache', "Pragma": "no-cache"})
     feedback = json.loads(response._content.decode('utf8'))
     replyData = feedback['ReplyData'][0]
     replyCode = feedback['ReplyCode']
+    print("Boardid: " , i , "ReplyCode: " , replyCode)
     if (replyCode == 200): #check if we have access to the boards
         for lane in replyData["Lanes"]: #looping through all lanes
-            if (lane["LaneClassType"] == 2): # Checking if it is a finish lane
+            if (lane["LaneType"] == 3): # Checking if it is a finish lane
                 end_lanes.append(lane["Id"]) # Add to finish lanes
             else:
                 start_lanes.append(lane["Id"]) # Add to state lanes
 
-    # Speed data to be sent
-    speed_data = {
-        "boardId": i,
-        "startLanes": start_lanes,
-        "finishLanes": end_lanes,
-        "startDate": startDate,
-        "endDate": endDate,
-        "timeOffset": 0
-    }
+        # Speed data to be sent
+        speed_data = {
+            "boardId": i,
+            "startLanes": start_lanes,
+            "finishLanes": end_lanes,
+            "startDate": startDate,
+            "endDate": endDate,
+            "timeOffset": -60
+        }
 
-    headers = {'content-type': 'application/json', 'Cache-Control': 'no-cache'}
-    # Get speed data from LeanKit
-    response = requests.post(Speed_API, data=json.dumps(
-        speed_data), headers=headers, auth=HTTPBasicAuth(email, password))
-    content = response._content
+        headers = {'content-type': 'application/json', 'Cache-Control': 'no-cache', "Pragma": "no-cache"}
+        # Get speed data from LeanKit
+        response = requests.post(Speed_API, data=json.dumps(
+            speed_data), headers=headers, auth=HTTPBasicAuth(email, password))
+        content = response._content
     
-    # Decode UTF-8 bytes to Unicode
-    content_json = content.decode('utf8')
-    if (response.status_code == 200):
-        # Find lead time and save results to array
-        lead_times.append(
-            {
-                "boardId:": i,
-                "leadTime": find_lead_time(content_json)
-            }
-        )
-    else:
-        print(response)
+        # Decode UTF-8 bytes to Unicode
+        content_json = content.decode('utf8')
+        if (response.status_code == 200):
+            # Find lead time and save results to array
+            lead_times.append(
+                {
+                    "boardId": i,
+                    "leadTime": find_lead_time(content_json)
+                }
+            )
+        else:
+            # print(response)
 
 # save lead times array as json file
 with open('lead_times.json', 'w') as f:
-    print(lead_times, file=f)
-print(lead_times)
+    print(json.dumps(lead_times), file=f)
+print(json.dumps(lead_times))
